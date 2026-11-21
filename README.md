@@ -8,8 +8,8 @@ Two dots at the right end of the top bar show UART activity. Green indicates rec
 
 ```mermaid
 flowchart LR
-    supply["5 V USB-C supply"] -->|USB-C| power["M5Stack USB-C to Grove (U151)"]
-    power -->|Powered Grove output| hub["M5Stack Grove Hub (U006)"]
+    supply["5 V USB-C supply"] -->|USB-C| power["M5Stack Grove to USB-C (A140)"]
+    power -->|Grove branch, 5 V and GND only| hub["M5Stack Grove Hub (U006)"]
     hub ---|Grove branch, UART and GND| dut["Device under test (DUT)"]
     subgraph terminal["StackTerminal assembly"]
         atom["Atom VoiceS3R (C126-ECHO)"]
@@ -22,7 +22,7 @@ flowchart LR
     base -->|HDMI| monitor["720p HDMI monitor"]
 ```
 
-Connect one powered Grove output on the USB-C to Grove unit to a branch port on the Grove Hub. Connect the DUT to another branch and the Atom's Grove port to the hub's main port. The hub wires its ports in parallel, so the USB-C supply feeds the Atom through the shared 5 V rail. [USB-C to Grove pinout](https://docs.m5stack.com/en/unit/Unit_TypeC_to_Grove#pinmap) · [Grove Hub documentation](https://docs.m5stack.com/en/unit/Unit_Hub)
+Connect the A140 to one branch port on the Grove Hub, the DUT to another branch, and the Atom's Grove port to the hub's main port. The hub wires its ports in parallel. For the 5 V supply shown, connect only 5 V and GND between the A140 and the hub. The A140 also routes USB D+ and D− directly to the two Grove signal pins, which the DUT connection uses for UART. [A140 schematic](https://m5stack-doc.oss-cn-shenzhen.aliyuncs.com/537/SCH_Grove2USB-C_V1.0.pdf) · [Grove Hub documentation](https://docs.m5stack.com/en/unit/Unit_Hub)
 
 Seat the Atom in the Atomic Display Base and connect the monitor to the base's HDMI port. Plug a data-capable USB-C to USB-A adapter into the Atom's own USB-C port, then plug the keyboard into the adapter. [Atomic Display Base documentation](https://docs.m5stack.com/en/atom/Atomic_Display_Base)
 
