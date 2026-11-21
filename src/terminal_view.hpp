@@ -40,6 +40,7 @@ private:
         std::u32string_view text;
         uint64_t id;
         size_t offset;
+        const Terminal::RawBytes* bytes = nullptr;
     };
 
     static void drawRow(lv_event_t* event);
@@ -60,9 +61,11 @@ private:
     Settings theme_;
     lv_obj_t* screen_ = nullptr;
     lv_obj_t* status_ = nullptr;
+    lv_obj_t* rxModeLabel_ = nullptr;
     lv_timer_t* rxActivity_ = nullptr;
     lv_timer_t* txActivity_ = nullptr;
     lv_obj_t* prompt_ = nullptr;
+    lv_obj_t* txModeLabel_ = nullptr;
     lv_obj_t* editorBackground_ = nullptr;
     lv_obj_t* panel_ = nullptr;
     lv_obj_t* panelPreview_ = nullptr;
@@ -77,7 +80,9 @@ private:
     int editorHeight_ = 0;
     int rowHeight_ = 0;
     int cell_ = 0;
+    int modeLabelWidth_ = 0;
     size_t selection_ = 0;
+    Terminal::Mode displayMode_ = Terminal::Mode::Ascii;
     bool replaceField_ = true;
     bool follow_ = true;
     bool cursorVisible_ = true;

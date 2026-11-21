@@ -48,27 +48,37 @@ UART uses 3.3 V logic. Use the appropriate converter for 5 V UART, RS-232, or RS
 
 | Key | Action |
 | --- | --- |
-| Enter | Send the command and append CR and LF |
-| Shift+Enter | Insert CR and LF at the cursor without sending |
+| Enter | Send the command. Append CR and LF in ASCII mode |
+| Shift+Enter | Insert CR and LF at the cursor in ASCII mode |
 | Ctrl+Enter | Send the command without appending a line ending |
-| Up / Down | Recall sent commands. Moving past the newest command restores the draft |
+| Up / Down | Recall sent commands for the input format. Moving past the newest command restores the draft |
 | Left / Right, Home / End | Move the cursor or jump to the start or end of the line |
 | Insert | Toggle insert and overwrite modes |
 | Page Up / Page Down | Scroll received lines by one page. The last page follows new data |
 | Ctrl+Up / Ctrl+Down | Change the font size |
+| Ctrl+Right / Ctrl+Left | Cycle the transmit mode forward or backward through ASCII, HEX, DEC LE, and DEC BE |
+| Left Alt+Right / Left Alt+Left | Cycle the receive display forward or backward through the same modes |
 | Ctrl+Tab | Open UART and color settings |
 | Right Alt + letter | Type a Polish character |
-| Ctrl+A through Ctrl+Z | Insert an ASCII control code from SOH through SUB |
+| Ctrl+A through Ctrl+Z | Insert an ASCII control code from SOH through SUB in ASCII mode |
 
 In Settings, use Up and Down to select a field. Use Left and Right to change the value, or type a baud rate or a six-digit RGB color. Enter saves the settings and current font size to nonvolatile storage (NVS). Esc or Ctrl+Tab closes Settings without saving.
 
-The terminal splits incoming UTF-8 text on CR, LF, or CR+LF. A CR+LF pair ends one history line and appears as two outlined labels. Other control characters, such as SOH, TAB, and ESC, also have outlined labels. The terminal keeps 512 received lines and 100 sent commands in RAM. Long lines wrap on screen. The receive limit is 2,048 characters per line.
+The transmit mode appears at the right end of the input row. The receive mode appears beside the activity dots in the top bar. Both start in ASCII and can be set independently.
+
+In HEX transmit mode, two hex digits encode one raw byte. Spaces are skipped. `FF` sends one byte, and `01 02 FF` sends three bytes. In DEC LE or DEC BE, type unsigned 32-bit values from 0 to 4294967295 separated by spaces. `16909060` sends `04 03 02 01` in DEC LE and `01 02 03 04` in DEC BE. Numeric modes send only the encoded bytes. ASCII, HEX, and decimal each keep a draft and up to 100 sent commands in RAM.
+
+The ASCII receive display splits incoming UTF-8 text on CR, LF, or CR+LF. A CR+LF pair ends one history line and appears as two outlined labels. Other control characters, such as SOH, TAB, and ESC, also have outlined labels. The terminal keeps 512 text lines in RAM. Long lines wrap on screen. The ASCII receive limit is 2,048 characters per line.
+
+HEX displays the original bytes in arrival order, including line endings. DEC LE and DEC BE group every four consecutive bytes as an unsigned 32-bit integer. DEC LE matches the ESP32-S3's native byte order. Pending bytes appear as bracketed hex until a complete word arrives. Numeric modes retain up to 512 rows of 16 bytes each. Diagnostic messages occupy their own rows and start a new group. [ESP32-S3 byte order](https://docs.espressif.com/projects/esp-idf/en/release-v5.4/esp32s3/api-reference/peripherals/spi_master.html)
 
 ## Quick hardware test
 
 1. Send `41 01 0D 0A 42 0A 43 0D` to the Atom over UART. The screen should show three lines, with separate `SOH`, `CR`, and `LF` labels after `A` on the first line.
 2. Type `A`, press Shift+Enter, type `B`, and press Ctrl+Enter. The DUT should receive `41 0D 0A 42`.
 3. Open Settings with Ctrl+Tab. Change a color and the baud rate, press Enter to save, and reboot the Atom. Verify that both values persist.
+4. After a restart, send `01 02 03 04 05` as the first UART bytes. Press Left Alt+Right three times. The history should show `01 02 03 04 05`, then `67305985 [05]`, then `16909060 [05]`. The RX label should follow each switch while the input row still shows `TX ASCII`.
+5. Press Ctrl+Right twice to select `TX DEC LE`. Type `16909060 X` and press Enter. The editor should reject `X`, and the DUT should receive exactly `04 03 02 01`. The RX label should still show `DEC BE (u32)`.
 
 ## USB keyboard diagnostics
 

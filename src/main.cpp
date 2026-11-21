@@ -35,6 +35,7 @@ bool inputDirty = true;
 int pages = 0;
 uint32_t blinkSince = 0;
 const char* uartError = nullptr;
+const char* txInputError = nullptr;
 
 void loadSettings() {
     esp_err_t err = nvs_flash_init();
@@ -113,16 +114,24 @@ void saveSettings() {
 }
 
 void transmit(bool suffix) {
-    auto bytes = terminal.transmission(suffix);
-    if (!uartReady || bytes.empty()) return;
+    if (!uartReady) return;
+    const auto bytes = terminal.transmission(suffix);
+    if (!bytes) {
+        txInputError = terminal.sendMode() == Terminal::Mode::Hex
+            ? "HEX: wpisz pełne pary cyfr szesnastkowych."
+            : "DEC: wpisz liczby od 0 do 4294967295 oddzielone spacjami.";
+        return;
+    }
+    txInputError = nullptr;
+    if (bytes->empty()) return;
 
     size_t available = 0;
     const esp_err_t result = uart_get_tx_buffer_free_size(port, &available);
-    if (result != ESP_OK || available < bytes.size() + 64) {
+    if (result != ESP_OK || available < bytes->size() + 64) {
         uartError = "Bufor TX pełny. Ponów Enter.";
         return;
     }
-    if (uart_write_bytes(port, bytes.data(), bytes.size()) != static_cast<int>(bytes.size())) {
+    if (uart_write_bytes(port, bytes->data(), bytes->size()) != static_cast<int>(bytes->size())) {
         uartError = "Błąd wysyłania UART.";
         return;
     }
@@ -200,6 +209,18 @@ void keyboardAction(uint8_t key, uint8_t modifiers) {
             view.editSetting(key == usbKeyboard::backspace ? U'\b' : c);
         return;
     }
+    const bool leftAlt = usbKeyboard::leftAlt(modifiers);
+    if ((key == usbKeyboard::left || key == usbKeyboard::right) && (leftAlt || ctrl)) {
+        const bool forward = key == usbKeyboard::right;
+        if (leftAlt) {
+            terminal.cycleDisplayMode(forward);
+        } else {
+            terminal.cycleSendMode(forward);
+            txInputError = nullptr;
+        }
+        inputDirty = true;
+        return;
+    }
     if (enter) {
         if (ctrl) transmit(false);
         else if (shift) terminal.insertLineBreak();
@@ -229,6 +250,7 @@ void keyboardAction(uint8_t key, uint8_t modifiers) {
                 else if (c) terminal.insert(c);
                 else return;
         }
+        txInputError = nullptr;
     }
     inputDirty = true;
     blinkSince = lv_tick_get();
@@ -291,7 +313,7 @@ extern "C" void app_main() {
         usbKeyboard::Diagnostic diagnostic{};
         while (usbKeyboard::readDiagnostic(diagnostic)) {
             const std::string_view line(diagnostic.data());
-            terminal.addLine(std::u32string(line.begin(), line.end()));
+            terminal.addMessage(std::u32string(line.begin(), line.end()));
             historyDirty = true;
         }
 #endif
@@ -300,10 +322,10 @@ extern "C" void app_main() {
             char status[180];
             const char parity = "NEO"[settings.parity];
             const char* stop = settings.stop == 0 ? "1" : (settings.stop == 1 ? "1,5" : "2");
+            const char* error = !uartReady ? "Błąd UART" : (txInputError ? txInputError : uartError);
             std::snprintf(status, sizeof(status), "UART %lu %lu%c%s%s%s",
                           static_cast<unsigned long>(settings.baud), static_cast<unsigned long>(settings.bits),
-                          parity, stop, uartError || !uartReady ? "   |   " : "",
-                          uartReady ? (uartError ? uartError : "") : "Błąd UART");
+                          parity, stop, error ? "   |   " : "", error ? error : "");
             view.update(terminal, settings, status, renderHistory, pages);
             inputDirty = false;
             pages = 0;

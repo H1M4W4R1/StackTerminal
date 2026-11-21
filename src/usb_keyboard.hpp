@@ -18,6 +18,7 @@ struct Report {
 
 inline bool shift(uint8_t modifiers) { return modifiers & 0x22; }
 inline bool ctrl(uint8_t modifiers) { return (modifiers & 0x11) && !(modifiers & 0x40); }
+inline bool leftAlt(uint8_t modifiers) { return modifiers & 0x04; }
 inline bool altGr(uint8_t modifiers) { return modifiers & 0x40; }
 
 bool start();

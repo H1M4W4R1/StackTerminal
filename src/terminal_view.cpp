@@ -28,6 +28,9 @@ constexpr int activityDotGap = 8;
 constexpr uint32_t activityIdle = 0x3c4b54;
 constexpr uint32_t activityPulseMs = 150;
 
+constexpr std::array modeNames{"ASCII", "HEX", "DEC LE (u32)", "DEC BE (u32)"};
+static_assert(modeNames.size() == static_cast<size_t>(Terminal::Mode::Count));
+
 constexpr int baudField = 0, textField = 4, backgroundField = 5;
 constexpr uint32_t baudRates[]{300, 1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200,
                                230400, 460800, 921600, 1000000, 1500000, 2000000, 3000000};
@@ -119,6 +122,12 @@ void setLabel(lv_obj_t* object, const char* text) {
     }
 }
 
+void setModeLabel(lv_obj_t* object, const char* direction, Terminal::Mode mode) {
+    char text[24];
+    std::snprintf(text, sizeof(text), "%s %s", direction, modeNames[static_cast<size_t>(mode)]);
+    setLabel(object, text);
+}
+
 void flush(lv_display_t* display, const lv_area_t* area, uint8_t* pixels) {
     hdmi.pushImageDMA(area->x1, area->y1, lv_area_get_width(area), lv_area_get_height(area),
                       reinterpret_cast<const lgfx::rgb565_t*>(pixels));
@@ -181,8 +190,17 @@ bool TerminalView::start() {
     lv_obj_remove_flag(screen_, LV_OBJ_FLAG_SCROLLABLE);
     box(screen_, 0, 0, width, headerHeight, panelColor);
     status_ = label(screen_, margin, 15, fonts_[0], dimText, "");
+    for (std::string_view name : modeNames) {
+        modeLabelWidth_ = std::max(modeLabelWidth_, static_cast<int>(name.size()));
+    }
+    modeLabelWidth_ = (modeLabelWidth_ + 3) * lv_font_get_glyph_width(fonts_[0], 'M', 0);
     const int txDotX = width - margin - activityDotSize;
-    rxActivity_ = makeActivityDot(screen_, txDotX - activityDotGap - activityDotSize);
+    const int rxDotX = txDotX - activityDotGap - activityDotSize;
+    rxModeLabel_ = label(screen_, rxDotX - 2 * activityDotGap - modeLabelWidth_, 15,
+                         fonts_[0], dimText, "RX ASCII");
+    lv_obj_set_width(rxModeLabel_, modeLabelWidth_);
+    lv_obj_set_style_text_align(rxModeLabel_, LV_TEXT_ALIGN_RIGHT, 0);
+    rxActivity_ = makeActivityDot(screen_, rxDotX);
     txActivity_ = makeActivityDot(screen_, txDotX);
     if (!rxActivity_ || !txActivity_) return false;
 
@@ -198,6 +216,9 @@ bool TerminalView::start() {
     lv_obj_set_style_border_width(editorBackground_, 1, 0);
     lv_obj_set_style_border_side(editorBackground_, LV_BORDER_SIDE_TOP, 0);
     prompt_ = label(screen_, margin, 0, fonts_[1], accent, ">");
+    txModeLabel_ = label(screen_, 0, 0, fonts_[0], dimText, "TX ASCII");
+    lv_obj_set_width(txModeLabel_, modeLabelWidth_);
+    lv_obj_set_style_text_align(txModeLabel_, LV_TEXT_ALIGN_RIGHT, 0);
     for (auto& row : editor_) {
         row.view = this;
         row.object = box(screen_, 0, 0, 1, 1, 0);
@@ -303,7 +324,9 @@ void TerminalView::assign(Row& row, std::u32string_view text, int cursor, bool o
 
 void TerminalView::updateDraft(const Terminal& terminal) {
     const int x = margin + 2 * cell_;
-    const int available = width - margin - x - cell_;
+    const int modeX = width - margin - modeLabelWidth_;
+    const int editorWidth = modeX - x - cell_;
+    const int available = editorWidth - cell_;
     std::vector<std::u32string> rows;
     std::u32string row;
     int used = 0;
@@ -342,13 +365,14 @@ void TerminalView::updateDraft(const Terminal& terminal) {
     lv_obj_set_pos(editorBackground_, 0, height - editorHeight_);
     lv_obj_set_height(editorBackground_, editorHeight_);
     lv_obj_set_pos(prompt_, margin, top + 3);
+    lv_obj_set_pos(txModeLabel_, modeX, top + (rowHeight_ - fonts_[0]->line_height) / 2);
     for (size_t i = 0; i < editor_.size(); ++i) {
         if (i >= shown) {
             lv_obj_add_flag(editor_[i].object, LV_OBJ_FLAG_HIDDEN);
             continue;
         }
         const size_t index = first + i;
-        position(editor_[i], x, top + static_cast<int>(i) * rowHeight_, width - margin - x);
+        position(editor_[i], x, top + static_cast<int>(i) * rowHeight_, editorWidth);
         assign(editor_[i], rows[index], index == cursorRow ? cursorX : -1, terminal.overwrite);
     }
 }
@@ -356,7 +380,8 @@ void TerminalView::updateDraft(const Terminal& terminal) {
 void TerminalView::updateHistory(const Terminal& terminal, int pages) {
     const int rowWidth = width - 2 * margin;
     historyRows_.clear();
-    uint64_t id = terminal.firstLine();
+    const bool ascii = displayMode_ == Terminal::Mode::Ascii;
+    uint64_t id = ascii ? terminal.firstLine() : terminal.firstRawLine();
     const auto addRows = [&](std::u32string_view line) {
         size_t offset = 0;
         do {
@@ -366,12 +391,22 @@ void TerminalView::updateHistory(const Terminal& terminal, int pages) {
             offset += count;
         } while (!line.empty());
     };
-    for (const auto& line : terminal.lines()) {
-        addRows(line);
-        ++id;
-    }
-    if (!terminal.pending().empty()) {
-        addRows(terminal.pending());
+    if (ascii) {
+        for (const auto& line : terminal.lines()) {
+            addRows(line);
+            ++id;
+        }
+        if (!terminal.pending().empty()) addRows(terminal.pending());
+    } else {
+        for (const auto& line : terminal.rawLines()) {
+            if (const auto* bytes = std::get_if<Terminal::RawBytes>(&line)) {
+                // A formatted 16-byte block fits on one row at every supported font size.
+                historyRows_.push_back({{}, id, 0, bytes});
+            } else {
+                addRows(std::get<std::u32string>(line));
+            }
+            ++id;
+        }
     }
 
     const int visible = std::min(static_cast<int>(history_.size()), historyHeight_ / rowHeight_);
@@ -399,13 +434,24 @@ void TerminalView::updateHistory(const Terminal& terminal, int pages) {
             continue;
         }
         position(history_[i], margin, historyY + static_cast<int>(i) * rowHeight_, rowWidth);
-        assign(history_[i], historyRows_[index].text);
+        const auto& row = historyRows_[index];
+        if (row.bytes) assign(history_[i], terminal.formatRaw(*row.bytes));
+        else assign(history_[i], row.text);
     }
     historyRows_.clear();
 }
 
 void TerminalView::update(const Terminal& terminal, const Settings& settings, const char* status,
                           bool refreshHistory, int pages) {
+    const auto mode = terminal.displayMode();
+    const bool changeMode = mode != displayMode_;
+    if (changeMode) {
+        if (mode == Terminal::Mode::Ascii || displayMode_ == Terminal::Mode::Ascii) {
+            follow_ = true;
+        }
+        displayMode_ = mode;
+        setModeLabel(rxModeLabel_, "RX", mode);
+    }
     const bool changeTheme = font_ != fonts_[settings.font] || theme_.text != settings.text
                        || theme_.background != settings.background;
     if (changeTheme) {
@@ -420,9 +466,10 @@ void TerminalView::update(const Terminal& terminal, const Settings& settings, co
         lv_obj_invalidate(screen_);
     }
     setLabel(status_, status);
+    setModeLabel(txModeLabel_, "TX", terminal.sendMode());
     updateDraft(terminal);
     const int newHistoryHeight = height - editorHeight_ - historyY - 10;
-    if (changeTheme || newHistoryHeight != historyHeight_ || refreshHistory || pages) {
+    if (changeMode || changeTheme || newHistoryHeight != historyHeight_ || refreshHistory || pages) {
         historyHeight_ = newHistoryHeight;
         updateHistory(terminal, pages);
     }
