@@ -1,0 +1,32 @@
+    .section .rodata.terminal_fonts, "a"
+
+    .macro begin_font size
+    .balign 4
+    .global _binary_mono_\size\()_bin_start
+    .global _binary_mono_\size\()_bin_end
+_binary_mono_\size\()_bin_start:
+    .endm
+
+    .macro end_font size
+_binary_mono_\size\()_bin_end:
+    .endm
+
+    begin_font 16
+    .incbin "@CMAKE_CURRENT_SOURCE_DIR@/fonts/mono_16.bin"
+    end_font 16
+
+    begin_font 20
+    .incbin "@CMAKE_CURRENT_SOURCE_DIR@/fonts/mono_20.bin"
+    end_font 20
+
+    begin_font 24
+    .incbin "@CMAKE_CURRENT_SOURCE_DIR@/fonts/mono_24.bin"
+    end_font 24
+
+    begin_font 30
+    .incbin "@CMAKE_CURRENT_SOURCE_DIR@/fonts/mono_30.bin"
+    end_font 30
+
+    begin_font 36
+    .incbin "@CMAKE_CURRENT_SOURCE_DIR@/fonts/mono_36.bin"
+    end_font 36
