@@ -2,6 +2,8 @@
 
 Terminal UART dla M5Stack Atom VoiceS3R (C126-ECHO) i Atomic Display Base (A115). LVGL wyświetla ciemny interfejs przez HDMI 720p. Zasilany hub USB obsługuje klawiaturę HID Boot w układzie polskim programisty.
 
+Na prawym końcu górnego paska zielona kropka sygnalizuje odbiór UART, a niebieska wysyłanie.
+
 ## Uruchomienie
 
 1. Podłącz Atom bezpośrednio do komputera przez USB-C i wprowadź go w tryb pobierania zgodnie z [instrukcją M5Stack](https://docs.m5stack.com/en/core/Atom_VoiceS3R#learn).

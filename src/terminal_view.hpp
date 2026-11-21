@@ -15,6 +15,8 @@ public:
     void update(const Terminal& terminal, const Settings& settings, const char* status,
                 bool refreshHistory, int pages = 0);
     void blink(bool visible);
+    void signalRx();
+    void signalTx();
 
     void openSettings(const Settings& current);
     void closeSettings();
@@ -58,6 +60,8 @@ private:
     Settings theme_;
     lv_obj_t* screen_ = nullptr;
     lv_obj_t* status_ = nullptr;
+    lv_timer_t* rxActivity_ = nullptr;
+    lv_timer_t* txActivity_ = nullptr;
     lv_obj_t* prompt_ = nullptr;
     lv_obj_t* editorBackground_ = nullptr;
     lv_obj_t* panel_ = nullptr;

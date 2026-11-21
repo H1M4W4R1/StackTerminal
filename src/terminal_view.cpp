@@ -17,11 +17,16 @@ namespace {
 constexpr int width = 1280;
 constexpr int height = 720;
 constexpr int margin = 28;
+constexpr int headerHeight = 52;
 constexpr int historyY = 68;
 constexpr uint32_t panelColor = 0x1b242c;
 constexpr uint32_t dimText = 0x9aadb9;
 constexpr uint32_t accent = 0x88d6c3;
 constexpr uint32_t separator = 0x35424b;
+constexpr int activityDotSize = 10;
+constexpr int activityDotGap = 8;
+constexpr uint32_t activityIdle = 0x3c4b54;
+constexpr uint32_t activityPulseMs = 150;
 
 constexpr int baudField = 0, textField = 4, backgroundField = 5;
 constexpr uint32_t baudRates[]{300, 1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200,
@@ -85,6 +90,27 @@ lv_obj_t* label(lv_obj_t* parent, int x, int y, const lv_font_t* font, uint32_t 
 void setBackground(lv_obj_t* object, uint32_t color) {
     lv_obj_set_style_bg_color(object, lv_color_hex(color), 0);
     lv_obj_set_style_bg_opa(object, LV_OPA_COVER, 0);
+}
+
+lv_timer_t* makeActivityDot(lv_obj_t* parent, int x) {
+    const int y = (headerHeight - activityDotSize) / 2;
+    auto* dot = box(parent, x, y, activityDotSize, activityDotSize, activityIdle);
+    lv_obj_set_style_radius(dot, LV_RADIUS_CIRCLE, 0);
+    auto* timer = lv_timer_create([](lv_timer_t* expired) {
+        auto* dot = static_cast<lv_obj_t*>(lv_timer_get_user_data(expired));
+        setBackground(dot, activityIdle);
+        lv_timer_pause(expired);
+    }, activityPulseMs, dot);
+    if (timer) lv_timer_pause(timer);
+    return timer;
+}
+
+void pulseActivity(lv_timer_t* timer, uint32_t color) {
+    if (lv_timer_get_paused(timer)) {
+        setBackground(static_cast<lv_obj_t*>(lv_timer_get_user_data(timer)), color);
+        lv_timer_resume(timer);
+    }
+    lv_timer_reset(timer);
 }
 
 void setLabel(lv_obj_t* object, const char* text) {
@@ -153,8 +179,12 @@ bool TerminalView::start() {
     screen_ = lv_screen_active();
     lv_obj_remove_style_all(screen_);
     lv_obj_remove_flag(screen_, LV_OBJ_FLAG_SCROLLABLE);
-    box(screen_, 0, 0, width, 52, panelColor);
+    box(screen_, 0, 0, width, headerHeight, panelColor);
     status_ = label(screen_, margin, 15, fonts_[0], dimText, "");
+    const int txDotX = width - margin - activityDotSize;
+    rxActivity_ = makeActivityDot(screen_, txDotX - activityDotGap - activityDotSize);
+    txActivity_ = makeActivityDot(screen_, txDotX);
+    if (!rxActivity_ || !txActivity_) return false;
 
     for (auto& row : history_) {
         row.view = this;
@@ -405,6 +435,10 @@ void TerminalView::blink(bool visible) {
         if (row.cursor >= 0) lv_obj_invalidate(row.object);
     }
 }
+
+void TerminalView::signalRx() { pulseActivity(rxActivity_, 0x49d17d); }
+
+void TerminalView::signalTx() { pulseActivity(txActivity_, 0x5aa9f7); }
 
 void TerminalView::openSettings(const Settings& current) {
     draftSettings_ = current;

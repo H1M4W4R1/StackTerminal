@@ -126,6 +126,7 @@ void transmit(bool suffix) {
         uartError = "Błąd wysyłania UART.";
         return;
     }
+    view.signalTx();
     uartError = nullptr;
     terminal.submitted();
 }
@@ -144,11 +145,14 @@ void receive() {
         historyDirty = true;
     }
     char bytes[1024];
+    bool received = false;
     for (int i = 0; i < 8; ++i) {
         const int count = uart_read_bytes(port, bytes, sizeof(bytes), 0);
         if (count <= 0) break;
+        received = true;
         historyDirty |= terminal.receive({bytes, static_cast<size_t>(count)});
     }
+    if (received) view.signalRx();
 }
 
 void keyboardAction(uint8_t key, uint8_t modifiers) {
