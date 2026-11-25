@@ -16,8 +16,8 @@ namespace {
 
 constexpr auto tag = "stackterminal";
 constexpr auto port = UART_NUM_1;
-constexpr int txPin = 2;
-constexpr int rxPin = 1;
+constexpr int whitePin = 1;
+constexpr int yellowPin = 2;
 constexpr int rxBuffer = 16384;
 constexpr int txBuffer = 8192;
 
@@ -28,6 +28,8 @@ nvs_handle_t storage;
 QueueHandle_t uartEvents;
 bool storageReady = false;
 bool uartReady = false;
+bool uartPinsSwapped = false;
+size_t emptyTxBufferBytes = 0;
 bool caps = false;
 bool num = true;
 bool historyDirty = true;
@@ -70,15 +72,47 @@ esp_err_t configureUart(const Settings& current) {
     return uart_param_config(port, &config);
 }
 
+esp_err_t configureUartPins(bool swapped) {
+    const int txPin = swapped ? whitePin : yellowPin;
+    const int rxPin = swapped ? yellowPin : whitePin;
+    // ESP-IDF releases the old TX output before routing the two new pins.
+    return uart_set_pin(port, txPin, rxPin, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
+}
+
 bool startUart() {
     esp_err_t err = configureUart(settings);
-    if (err == ESP_OK) err = uart_set_pin(port, txPin, rxPin, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
+    if (err == ESP_OK) err = configureUartPins(uartPinsSwapped);
     if (err == ESP_OK) err = uart_driver_install(port, rxBuffer, txBuffer, 48, &uartEvents, 0);
+    if (err == ESP_OK) err = uart_get_tx_buffer_free_size(port, &emptyTxBufferBytes);
     if (err != ESP_OK) {
         ESP_LOGE(tag, "Grove UART: %s", esp_err_to_name(err));
         return false;
     }
     return true;
+}
+
+void swapUartPins() {
+    if (!uartReady) return;
+
+    inputDirty = true;
+    txInputError = nullptr;
+    size_t available = 0;
+    // Check both the driver's queue and the hardware transmitter before moving TX.
+    if (uart_get_tx_buffer_free_size(port, &available) != ESP_OK || available != emptyTxBufferBytes
+        || uart_wait_tx_done(port, 0) != ESP_OK) {
+        uartError = "UART nadal nadaje. Ponów Ctrl+F2.";
+        return;
+    }
+
+    const esp_err_t result = configureUartPins(!uartPinsSwapped);
+    if (result != ESP_OK) {
+        ESP_LOGE(tag, "Grove UART pin swap: %s", esp_err_to_name(result));
+        uartError = "Nie udało się zamienić pinów UART.";
+        return;
+    }
+    uartPinsSwapped = !uartPinsSwapped;
+    view.setUartPinsSwapped(uartPinsSwapped);
+    uartError = nullptr;
 }
 
 void saveSettings() {
@@ -209,6 +243,10 @@ void keyboardAction(uint8_t key, uint8_t modifiers) {
             view.editSetting(key == usbKeyboard::backspace ? U'\b' : c);
         return;
     }
+    if (key == usbKeyboard::f2 && ctrl) {
+        swapUartPins();
+        return;
+    }
     const bool leftAlt = usbKeyboard::leftAlt(modifiers);
     if ((key == usbKeyboard::left || key == usbKeyboard::right) && (leftAlt || ctrl)) {
         const bool forward = key == usbKeyboard::right;
@@ -259,7 +297,7 @@ void keyboardAction(uint8_t key, uint8_t modifiers) {
 bool repeatable(uint8_t key) {
     return key != usbKeyboard::enter && key != usbKeyboard::keypadEnter && key != usbKeyboard::insert
            && key != usbKeyboard::capsLock && key != usbKeyboard::numLock && key != usbKeyboard::tab
-           && key != usbKeyboard::escape && (num || key != 0x62);
+           && key != usbKeyboard::escape && key != usbKeyboard::f2 && (num || key != 0x62);
 }
 
 void pollKeyboard(uint32_t now) {

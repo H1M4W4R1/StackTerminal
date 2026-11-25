@@ -7,7 +7,7 @@ namespace usbKeyboard {
 
 enum Key : uint8_t {
     enter = 0x28, escape, backspace, tab, space,
-    capsLock = 0x39, insert = 0x49, home, pageUp, del, end, pageDown,
+    capsLock = 0x39, f2 = 0x3b, insert = 0x49, home, pageUp, del, end, pageDown,
     right, left, down, up, numLock, keypadEnter = 0x58
 };
 

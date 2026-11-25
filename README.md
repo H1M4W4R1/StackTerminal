@@ -2,7 +2,7 @@
 
 StackTerminal is a UART terminal for the M5Stack Atom VoiceS3R (C126-ECHO) and Atomic Display Base (A115). It runs a dark LVGL interface at 720p over HDMI and accepts a USB HID Boot keyboard using the Polish programmer layout.
 
-Two dots at the right end of the top bar show UART activity. Green indicates receive (RX), and blue indicates transmit (TX).
+Two dots at the right end of the top bar show the UART pin mapping and activity. The left dot is RX and the right dot is TX. White represents the GPIO1 Grove wire and yellow represents GPIO2. Each dot brightens when data moves in its direction.
 
 ## Hardware connections
 
@@ -28,14 +28,16 @@ Seat the Atom in the Atomic Display Base and connect the monitor to the base's H
 
 ### Grove UART pinout
 
-| Grove wire | Atom pin | DUT connection |
-| --- | --- | --- |
-| Black | GND | Common ground |
-| White | GPIO1 / RX | DUT TX |
-| Yellow | GPIO2 / TX | DUT RX |
-| Red | 5 V supply | Leave disconnected at the DUT end if the DUT has its own power supply |
+| Grove wire | Atom pin | Default | Swapped |
+| --- | --- | --- | --- |
+| Black | GND | Common ground | Common ground |
+| White | GPIO1 | RX (DUT TX) | TX (DUT RX) |
+| Yellow | GPIO2 | TX (DUT RX) | RX (DUT TX) |
+| Red | 5 V supply | Grove power | Grove power |
 
-UART uses 3.3 V logic. Use the appropriate converter for 5 V UART, RS-232, or RS-485. The red Grove wire carries 5 V from the power supply. [Atom VoiceS3R pinout](https://docs.m5stack.com/en/core/Atom_VoiceS3R#pinmap)
+Use the pinout of your UART module to choose a mapping for a straight-through Grove cable. Press Ctrl+F2 in the terminal to swap TX and RX, and check the dot colors before connecting the module. A restart restores the default mapping. If the terminal is still sending, wait for the transmission to finish and press Ctrl+F2 again.
+
+UART uses 3.3 V logic. Use the appropriate converter for 5 V UART, RS-232, or RS-485. The red Grove wire carries 5 V from the power supply. Leave it disconnected at the DUT end if the DUT has its own power supply. [Atom VoiceS3R pinout](https://docs.m5stack.com/en/core/Atom_VoiceS3R#pinmap)
 
 ## Getting started
 
@@ -58,6 +60,7 @@ UART uses 3.3 V logic. Use the appropriate converter for 5 V UART, RS-232, or RS
 | Ctrl+Up / Ctrl+Down | Change the font size |
 | Ctrl+Right / Ctrl+Left | Cycle the transmit mode forward or backward through ASCII, HEX, DEC LE, and DEC BE |
 | Left Alt+Right / Left Alt+Left | Cycle the receive display forward or backward through the same modes |
+| Ctrl+F2 | Swap the Grove UART TX and RX pins |
 | Ctrl+Tab | Open UART and color settings |
 | Right Alt + letter | Type a Polish character |
 | Ctrl+A through Ctrl+Z | Insert an ASCII control code from SOH through SUB in ASCII mode |
@@ -79,6 +82,12 @@ HEX displays the original bytes in arrival order, including line endings. DEC LE
 3. Open Settings with Ctrl+Tab. Change a color and the baud rate, press Enter to save, and reboot the Atom. Verify that both values persist.
 4. After a restart, send `01 02 03 04 05` as the first UART bytes. Press Left Alt+Right three times. The history should show `01 02 03 04 05`, then `67305985 [05]`, then `16909060 [05]`. The RX label should follow each switch while the input row still shows `TX ASCII`.
 5. Press Ctrl+Right twice to select `TX DEC LE`. Type `16909060 X` and press Enter. The editor should reject `X`, and the DUT should receive exactly `04 03 02 01`. The RX label should still show `DEC BE (u32)`.
+
+### UART pin swap
+
+1. With the DUT disconnected, press and hold Ctrl+F2. The dots should swap once, to yellow on the left and white on the right.
+2. Connect a UART module with TX on yellow and RX on white using a straight-through Grove cable. Send data in both directions and check that the corresponding dot brightens.
+3. Disconnect the module and press Ctrl+F2 again. The dots should return to white on the left and yellow on the right.
 
 ## USB keyboard diagnostics
 

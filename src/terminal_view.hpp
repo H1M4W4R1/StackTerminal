@@ -17,6 +17,7 @@ public:
     void blink(bool visible);
     void signalRx();
     void signalTx();
+    void setUartPinsSwapped(bool swapped);
 
     void openSettings(const Settings& current);
     void closeSettings();

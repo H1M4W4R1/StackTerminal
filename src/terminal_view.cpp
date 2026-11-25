@@ -25,7 +25,9 @@ constexpr uint32_t accent = 0x88d6c3;
 constexpr uint32_t separator = 0x35424b;
 constexpr int activityDotSize = 10;
 constexpr int activityDotGap = 8;
-constexpr uint32_t activityIdle = 0x3c4b54;
+constexpr uint32_t whiteWireColor = 0xffffff;
+constexpr uint32_t yellowWireColor = 0xffd338;
+constexpr lv_opa_t activityIdleOpacity = LV_OPA_60;
 constexpr uint32_t activityPulseMs = 150;
 
 constexpr std::array modeNames{"ASCII", "HEX", "DEC LE (u32)", "DEC BE (u32)"};
@@ -95,22 +97,24 @@ void setBackground(lv_obj_t* object, uint32_t color) {
     lv_obj_set_style_bg_opa(object, LV_OPA_COVER, 0);
 }
 
-lv_timer_t* makeActivityDot(lv_obj_t* parent, int x) {
+lv_timer_t* makeActivityDot(lv_obj_t* parent, int x, uint32_t color) {
     const int y = (headerHeight - activityDotSize) / 2;
-    auto* dot = box(parent, x, y, activityDotSize, activityDotSize, activityIdle);
+    auto* dot = box(parent, x, y, activityDotSize, activityDotSize, color);
     lv_obj_set_style_radius(dot, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_opa(dot, activityIdleOpacity, 0);
     auto* timer = lv_timer_create([](lv_timer_t* expired) {
         auto* dot = static_cast<lv_obj_t*>(lv_timer_get_user_data(expired));
-        setBackground(dot, activityIdle);
+        lv_obj_set_style_bg_opa(dot, activityIdleOpacity, 0);
         lv_timer_pause(expired);
     }, activityPulseMs, dot);
     if (timer) lv_timer_pause(timer);
     return timer;
 }
 
-void pulseActivity(lv_timer_t* timer, uint32_t color) {
+void pulseActivity(lv_timer_t* timer) {
     if (lv_timer_get_paused(timer)) {
-        setBackground(static_cast<lv_obj_t*>(lv_timer_get_user_data(timer)), color);
+        auto* dot = static_cast<lv_obj_t*>(lv_timer_get_user_data(timer));
+        lv_obj_set_style_bg_opa(dot, LV_OPA_COVER, 0);
         lv_timer_resume(timer);
     }
     lv_timer_reset(timer);
@@ -200,8 +204,8 @@ bool TerminalView::start() {
                          fonts_[0], dimText, "RX ASCII");
     lv_obj_set_width(rxModeLabel_, modeLabelWidth_);
     lv_obj_set_style_text_align(rxModeLabel_, LV_TEXT_ALIGN_RIGHT, 0);
-    rxActivity_ = makeActivityDot(screen_, rxDotX);
-    txActivity_ = makeActivityDot(screen_, txDotX);
+    rxActivity_ = makeActivityDot(screen_, rxDotX, whiteWireColor);
+    txActivity_ = makeActivityDot(screen_, txDotX, yellowWireColor);
     if (!rxActivity_ || !txActivity_) return false;
 
     for (auto& row : history_) {
@@ -483,9 +487,16 @@ void TerminalView::blink(bool visible) {
     }
 }
 
-void TerminalView::signalRx() { pulseActivity(rxActivity_, 0x49d17d); }
+void TerminalView::signalRx() { pulseActivity(rxActivity_); }
 
-void TerminalView::signalTx() { pulseActivity(txActivity_, 0x5aa9f7); }
+void TerminalView::signalTx() { pulseActivity(txActivity_); }
+
+void TerminalView::setUartPinsSwapped(bool swapped) {
+    auto* rxDot = static_cast<lv_obj_t*>(lv_timer_get_user_data(rxActivity_));
+    auto* txDot = static_cast<lv_obj_t*>(lv_timer_get_user_data(txActivity_));
+    lv_obj_set_style_bg_color(rxDot, lv_color_hex(swapped ? yellowWireColor : whiteWireColor), 0);
+    lv_obj_set_style_bg_color(txDot, lv_color_hex(swapped ? whiteWireColor : yellowWireColor), 0);
+}
 
 void TerminalView::openSettings(const Settings& current) {
     draftSettings_ = current;
